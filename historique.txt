@@ -4,3 +4,13 @@ explicatives (de comptes officiels de préférence) afin d'aquérir les connaiss
 Ensuite, s'autoformer via des vidéos ou des cours si la limite de temps le permet; sinon utiliser l'IA en essayant de vibe coder
 le moins possible afin de comprendre le projet et de ne pas se retrouver noyer par une méconnaissance totale du travail
 qui a été réalisé.
+
+
+Difficultés :
+- Mathis maîtrise vaguement la création de containers avec Docker. De ce fait, il a été plus difficile de se projeter sur cette tâche
+et de la mettre en place.
+    => Pour palier à ce problème, il va s'autoformer via des vidéos de tutoriels ainsi qu'à l'aide de site internet et de l'IA pour
+    comprendre entièrement le système de dockeurisation et le mettre en place
+- Nous n'avons jamais utilisé de NoSQL en situation réelle, dans un projet.
+    => Simon se charge de réaliser une série de schémas afin d'avoir notre structure de travail avec les serveurs et les routeurs lorsque nous nous mettrons
+    au développement. Cela nous évitera de réfléchir au nombre de serveurs/routeurs que nous souhaitons mettre ainsi qu'à leurs fonctionnalités.
