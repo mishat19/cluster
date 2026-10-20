@@ -1,0 +1,6 @@
+Lorsque l'on ne connait pas une technologie, il est primordial de se renseigner sur des sites internet, des vidéos
+explicatives (de comptes officiels de préférence) afin d'aquérir les connaissances de base.
+
+Ensuite, s'autoformer via des vidéos ou des cours si la limite de temps le permet; sinon utiliser l'IA en essayant de vibe coder
+le moins possible afin de comprendre le projet et de ne pas se retrouver noyer par une méconnaissance totale du travail
+qui a été réalisé.

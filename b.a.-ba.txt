@@ -1,0 +1,24 @@
+Directives docker-compose
+services — La section racine d'un fichier Compose qui définit chaque conteneur de l'application (ex. web, db, api).
+image — L'image Docker à utiliser pour le service, téléchargée depuis un registre (ex. image: mongo:7).
+build — Construit une image à partir d'un Dockerfile (ou docker-compose.yml) au lieu d'utiliser une image existante. Peut préciser le contexte (context: .) et le fichier (dockerfile:).
+command — Surcharge la commande par défaut du conteneur (CMD de l'image). Ex. command: mongod --replSet rs0.
+container_name — Nom fixe du conteneur (sinon Docker génère un nom du type projet-service-1).
+volumes — Monte des chemins hôtes dans le conteneur ou crée des volumes nommés pour persister les données. Ex. ./data:/data/db ou mongo-data:/data/db.
+ports — Publie des ports au format hôte:conteneur. Ex. 27017:27017 expose MongoDB sur la machine hôte.
+networks — Réseaux virtuels auxquels les services se raccordent ; les services sur le même réseau communiquent par nom DNS.
+depends_on — Définit l'ordre de démarrage : ce service attend que les services listés soient lancés (mais pas forcément prêts, d'où les healthchecks).
+environment — Variables d'environnement injectées dans le conteneur. Ex. MONGO_INITDB_ROOT_USERNAME: root.
+restart — Politique de redémarrage : no, always, unless-stopped (par défaut recommandé), ou on-failure.
+develop — Section de configuration de Compose Watch (Compose 2.22+) : synchronise automatiquement les fichiers ou reconstruit l'image quand le code change en développement.
+include — Permet d'inclure d'autres fichiers Compose dans un projet, pour composer plusieurs fichiers séparés en un seul environnement (Compose 2.20+).
+Healthcheck
+healthcheck — Définit comment vérifier que le conteneur est réellement prêt (pas juste démarré). Utilisé avec depends_on: condition: service_healthy.test — La commande de vérification, ex. ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"].
+interval — Fréquence du test (ex. 10s).
+timeout — Délai au-delà duquel le test est considéré comme échoué (ex. 5s).
+(Souvent aussi retries et start_period.)
+
+Options MongoDB (mongod)
+replSet — Nom du replica set (--replSet rs0). Active le mode répliqué, nécessaire pour les transactions et les clusters sharding.
+shardsvr — Déclare l'instance comme shard (--shardsvr), utilisé dans une architecture cluster sharded MongoDB.
+bind_ip_all — Fait écouter mongod sur toutes les interfaces réseau (0.0.0.0), indispensable pour accepter les connexions depuis d'autres conteneurs.
