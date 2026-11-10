@@ -5,14 +5,14 @@ import subprocess
 import sys
 
 if len(sys.argv) > 1 and sys.argv[1] == "stop":
-    subprocess.run(["docker", "compose", "down"])
-    sys.exit()
+    sys.exit(subprocess.run(["docker", "compose", "down"]).returncode)
 
-# "up" attend que init_cluster ait fini avant de démarrer historique
+# Démarre le cluster et attend la fin de l'initialisation
 resultat = subprocess.run(["docker", "compose", "up", "-d", "--build"])
 
 if resultat.returncode == 0:
-    print("\nCluster prêt : routeur_1 -> localhost:27017, routeur_2 -> localhost:27018")
+    print("Cluster démarré. Initialisation en cours (voir: docker logs -f init_cluster)")
+    print("Routeurs: routeur_1 -> localhost:27017, routeur_2 -> localhost:27018")
 else:
-    print("\nÉchec du démarrage, voir :  docker logs init_cluster")
+    print("Échec du démarrage, voir : docker compose logs")
     sys.exit(1)

@@ -1,26 +1,28 @@
-Directives docker-compose
+Directives Docker Compose
 
-- services : La section racine d'un fichier Compose qui définit chaque conteneur de l'application (ex: web, db, api).
-- image : L'image Docker à utiliser pour le service, téléchargée depuis un registre (ex: mongo:7).
-- build : Construit une image à partir d'un Dockerfile (ou docker-compose.yml) au lieu d'utiliser une image existante. Peut préciser le contexte (context: .) et le fichier (dockerfile:).
-- command : Surcharge la commande par défaut du conteneur (CMD de l'image). ex: command: mongod --replSet rs0.
-- container_name : Nom fixe du conteneur (sinon Docker génère un nom du type projet-service-1).
-- volumes : Monte des chemins hôtes dans le conteneur ou crée des volumes nommés pour persister les données. ex: ./data:/data/db ou mongo-data:/data/db.
-- ports : Publie des ports au format hôte:conteneur. ex: 27017:27017 expose MongoDB sur la machine hôte.
-- networks : Réseaux virtuels auxquels les services se raccordent; les services sur le même réseau communiquent par nom DNS.
-- depends_on : Définit l'ordre de démarrage : ce service attend que les services listés soient lancés (mais pas forcément prêts, d'où les healthchecks).
-- environment : Variables d'environnement injectées dans le conteneur (ex: MONGO_INITDB_ROOT_USERNAME: root).
-- restart : Politique de redémarrage : no, always, unless-stopped (par défaut recommandé), ou on-failure.
-- develop : Section de configuration de Compose Watch (Compose 2.22+) : synchronise automatiquement les fichiers ou reconstruit l'image quand le code change en développement.
-- include : Permet d'inclure d'autres fichiers Compose dans un projet, pour composer plusieurs fichiers séparés en un seul environnement.
+- services : Section racine d'un fichier Compose qui définit chaque conteneur/service de l'application (ex. routeurs, shards, serveurs de config).
+- image : Image Docker utilisée pour créer le conteneur, téléchargée depuis un registre si absente localement (ex. mongo:7).
+- build : Construit une image à partir d'un Dockerfile au lieu d'utiliser une image existante. Peut préciser le contexte et le fichier (context, dockerfile).
+- command : Surcharge la commande par défaut du conteneur (CMD/ENTRYPOINT selon usage). Ex. lancer mongod/mongos avec des options.
+- container_name : Nom fixe attribué au conteneur (sinon Docker Compose en génère un). Utile pour cibler un conteneur par son nom.
+- volumes : Monte des volumes nommés ou des chemins hôte dans le conteneur pour persister les données ou partager des fichiers. Ex. ./python:/app ou mongo-data:/data/db.
+- ports : Publie des ports du conteneur vers la machine hôte au format hôte:conteneur. Ex. "27017:27017" expose un routeur sur l'hôte.
+- networks : Réseaux virtuels auxquels le service se raccorde. Les conteneurs d'un même réseau se résolvent et communiquent par nom de service/conteneur.
+- depends_on : Définit des dépendances de démarrage entre services. Peut attendre qu'un service soit démarré ou qu'il ait terminé avec succès (condition: service_completed_successfully).
+- environment : Variables d'environnement injectées dans le conteneur (ex. URI, paramètres applicatifs).
+- restart : Politique de redémarrage du conteneur : "no", always, unless-stopped, on-failure. Permet de relancer un service après arrêt/crash selon le besoin.
+- develop : Section de développement (Compose Watch) permettant de synchroniser des fichiers, reconstruire ou relancer automatiquement lors de modifications en dev.
+- include : Permet d'inclure d'autres fichiers Compose dans le projet pour composer/organiser une configuration en plusieurs fichiers.
 
-Healthcheck
-- healthcheck : Définit comment vérifier que le conteneur est réellement prêt (pas juste démarré).
-- test : La commande de vérification (ex: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]).
-- interval : Fréquence du test (ex: 10s).
-- timeout : Délai au-delà duquel le test est considéré comme échoué (ex: 5s). (Souvent aussi retries et start_period.)
+Options MongoDB (moteur mongod/mongos)
 
-Options MongoDB (mongod)
-- replSet : Nom du replica set (--replSet rs0). Active le mode répliqué, nécessaire pour les transactions et les clusters sharding.
-- shardsvr : Déclare l'instance comme shard (--shardsvr), utilisé dans une architecture cluster sharded MongoDB.
-- bind_ip_all : Fait écouter mongod sur toutes les interfaces réseau (0.0.0.0), indispensable pour accepter les connexions depuis d'autres conteneurs.
+- replSet : Nom du replica set (ex. --replSet rs_a). Active la réplication (primary/secondary) nécessaire au sharding et à la haute disponibilité.
+- shardsvr : Indique que l'instance mongod est un membre de shard dans un cluster shardé (écoute par défaut sur le port shard, ex. 27018).
+- bind_ip_all : Fait écouter le serveur sur toutes les interfaces réseau (0.0.0.0) afin qu'il soit joignable depuis les autres conteneurs du réseau.
+
+Healthcheck (vérification de santé)
+
+- healthcheck : Décrit comment Docker vérifie que le conteneur est réellement prêt/fonctionnel (au-delà du simple démarrage).
+- test : Commande exécutée pour le contrôle de santé (ex. ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]).
+- interval : Fréquence d'exécution du test de santé (ex. 10s).
+- timeout : Durée maximale accordée à l'exécution du test avant de le considérer en échec (ex. 5s).

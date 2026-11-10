@@ -1,11 +1,11 @@
 services:
-  # ============ SERVEURS DE CONFIGURATION (replica set de 3) ============
+  # ============ SERVEURS DE CONFIGURATION (replica set configRs) ============
   config_1:
     image: mongo:7
     container_name: config_1
     command: mongod --configsvr --replSet configRs --bind_ip_all --port 27019
     volumes:
-      - config_1-data:/data/db
+      - config_1-data:/data/configdb
     networks: [mongo-net]
     restart: unless-stopped
 
@@ -14,7 +14,7 @@ services:
     container_name: config_2
     command: mongod --configsvr --replSet configRs --bind_ip_all --port 27019
     volumes:
-      - config_2-data:/data/db
+      - config_2-data:/data/configdb
     networks: [mongo-net]
     restart: unless-stopped
 
@@ -23,15 +23,15 @@ services:
     container_name: config_3
     command: mongod --configsvr --replSet configRs --bind_ip_all --port 27019
     volumes:
-      - config_3-data:/data/db
+      - config_3-data:/data/configdb
     networks: [mongo-net]
     restart: unless-stopped
 
-  # ============ Serveur 1 : 1 serveur principal + 2 réplicats ============
+  # ============ SHARD A : 1 principal + 2 secondaires ============
   principal_a:
     image: mongo:7
     container_name: principal_a
-    command: mongod --shardsvr --replSet shard1Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_a --bind_ip_all --port 27018
     volumes:
       - principal_a-data:/data/db
     networks: [mongo-net]
@@ -40,7 +40,7 @@ services:
   secondaire_a_1:
     image: mongo:7
     container_name: secondaire_a_1
-    command: mongod --shardsvr --replSet shard1Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_a --bind_ip_all --port 27018
     volumes:
       - secondaire_a_1-data:/data/db
     networks: [mongo-net]
@@ -49,17 +49,17 @@ services:
   secondaire_a_2:
     image: mongo:7
     container_name: secondaire_a_2
-    command: mongod --shardsvr --replSet shard1Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_a --bind_ip_all --port 27018
     volumes:
       - secondaire_a_2-data:/data/db
     networks: [mongo-net]
     restart: unless-stopped
 
-  # ============ Serveur 2 : 1 serveur principal + 2 réplicats ============
+  # ============ SHARD B : 1 principal + 2 secondaires ============
   principal_b:
     image: mongo:7
     container_name: principal_b
-    command: mongod --shardsvr --replSet shard2Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_b --bind_ip_all --port 27018
     volumes:
       - principal_b-data:/data/db
     networks: [mongo-net]
@@ -68,7 +68,7 @@ services:
   secondaire_b_1:
     image: mongo:7
     container_name: secondaire_b_1
-    command: mongod --shardsvr --replSet shard2Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_b --bind_ip_all --port 27018
     volumes:
       - secondaire_b_1-data:/data/db
     networks: [mongo-net]
@@ -77,17 +77,17 @@ services:
   secondaire_b_2:
     image: mongo:7
     container_name: secondaire_b_2
-    command: mongod --shardsvr --replSet shard2Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_b --bind_ip_all --port 27018
     volumes:
       - secondaire_b_2-data:/data/db
     networks: [mongo-net]
     restart: unless-stopped
 
-  # ============ Serveur 3 : 1 serveur principal + 2 réplicats ============
+  # ============ SHARD C : 1 principal + 2 secondaires ============
   principal_c:
     image: mongo:7
     container_name: principal_c
-    command: mongod --shardsvr --replSet shard3Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_c --bind_ip_all --port 27018
     volumes:
       - principal_c-data:/data/db
     networks: [mongo-net]
@@ -96,7 +96,7 @@ services:
   secondaire_c_1:
     image: mongo:7
     container_name: secondaire_c_1
-    command: mongod --shardsvr --replSet shard3Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_c --bind_ip_all --port 27018
     volumes:
       - secondaire_c_1-data:/data/db
     networks: [mongo-net]
@@ -105,7 +105,7 @@ services:
   secondaire_c_2:
     image: mongo:7
     container_name: secondaire_c_2
-    command: mongod --shardsvr --replSet shard3Rs --bind_ip_all --port 27018
+    command: mongod --shardsvr --replSet rs_c --bind_ip_all --port 27018
     volumes:
       - secondaire_c_2-data:/data/db
     networks: [mongo-net]
@@ -117,7 +117,7 @@ services:
     container_name: routeur_1
     command: mongos --configdb configRs/config_1:27019,config_2:27019,config_3:27019 --bind_ip_all --port 27017
     ports:
-      - "27017:27017" # accès depuis la machine hôte
+      - "27017:27017"
     networks: [mongo-net]
     depends_on:
       - config_1
@@ -138,10 +138,11 @@ services:
       - config_3
     restart: unless-stopped
 
-  # ============ INITIALISATION AUTOMATIQUE DU CLUSTER ============
-  setup:
-    image: mongo:7
-    container_name: cluster-setup
+  # ============ INITIALISATION DU CLUSTER ============
+  init_cluster:
+    build:
+      context: ./python
+    container_name: init_cluster
     depends_on:
       - config_1
       - config_2
@@ -158,10 +159,28 @@ services:
       - routeur_1
       - routeur_2
     volumes:
+      - ./python:/app
       - ./scripts:/scripts:ro
     networks: [mongo-net]
-    entrypoint: ["/bin/bash", "/scripts/init-cluster.sh"]
+    command: ["python", "/app/init_cluster.py"]
     restart: "no"
+
+  # ============ SERVEUR HISTORIQUE (oplog/change stream) ============
+  historique:
+    build:
+      context: ./python
+    container_name: historique
+    depends_on:
+      init_cluster:
+        condition: service_completed_successfully
+    environment:
+      - MONGO_URI=mongodb://routeur_1:27017,routeur_2:27017/
+    volumes:
+      - ./python:/app
+      - historique-data:/data/historique
+    networks: [mongo-net]
+    command: ["python", "/app/historique.py"]
+    restart: unless-stopped
 
 volumes:
   config_1-data:
@@ -176,6 +195,7 @@ volumes:
   principal_c-data:
   secondaire_c_1-data:
   secondaire_c_2-data:
+  historique-data:
 
 networks:
   mongo-net:

@@ -1,75 +1,124 @@
-"""Initialise le cluster : replica sets -> groupes (shards) -> découpage de books.books."""
+"""Initialise le cluster : replica sets -> shards -> sharding + import de books.books."""
+import json
+import os
 import time
 
+from bson import json_util
 from pymongo import MongoClient
 from pymongo.errors import OperationFailure, PyMongoError
 
-PORT = 27017
 REPLICA_SETS = {
-    "rs_config": ["config_1", "config_2", "config_3"],
-    "rs_a": ["principal_a", "secondaire_a_1", "secondaire_a_2"],
-    "rs_b": ["principal_b", "secondaire_b_1", "secondaire_b_2"],
-    "rs_c": ["principal_c", "secondaire_c_1", "secondaire_c_2"],
+    "configRs": {
+        "members": ["config_1", "config_2", "config_3"],
+        "port": 27019,
+        "configsvr": True,
+    },
+    "rs_a": {"members": ["principal_a", "secondaire_a_1", "secondaire_a_2"], "port": 27018},
+    "rs_b": {"members": ["principal_b", "secondaire_b_1", "secondaire_b_2"], "port": 27018},
+    "rs_c": {"members": ["principal_c", "secondaire_c_1", "secondaire_c_2"], "port": 27018},
 }
 ROUTEURS = "mongodb://routeur_1:27017,routeur_2:27017/"
+BOOKS_PATH = os.environ.get("BOOKS_PATH", "/scripts/books.txt")
 
 
-def reessayer(action, essais=30):
-    """Relance une action tant que le serveur n'est pas prêt."""
-    for _ in range(essais):
+def reessayer(action, essais=60, delai=2, label="action"):
+    for i in range(essais):
         try:
             return action()
-        except PyMongoError as erreur:
-            print(f"  en attente... ({erreur})")
-            time.sleep(2)
-    raise RuntimeError("Le cluster ne répond pas, abandon.")
+        except (PyMongoError, OperationFailure) as erreur:
+            print(f"  en attente ({label}) {i + 1}/{essais}: {erreur}")
+            time.sleep(delai)
+    raise RuntimeError(f"Abandon: {label}")
 
 
-def initier_replica_set(nom, membres):
+def initier_replica_set(nom, spec):
+    membres = spec["members"]
+    port = spec["port"]
     config = {
         "_id": nom,
-        # Le 1er membre a une priorité plus haute : c'est lui qui devient PRIMARY
         "members": [
-            {"_id": i, "host": f"{hote}:{PORT}", "priority": 2 if i == 0 else 1}
+            {"_id": i, "host": f"{hote}:{port}", "priority": 2 if i == 0 else 1}
             for i, hote in enumerate(membres)
         ],
     }
-    if nom == "rs_config":
+    if spec.get("configsvr"):
         config["configsvr"] = True
 
-    client = MongoClient(membres[0], PORT, directConnection=True)
+    client = MongoClient(membres[0], port, directConnection=True, serverSelectionTimeoutMS=5000)
     try:
         client.admin.command("replSetInitiate", config)
-        print(f"{nom} : initialisé")
+        print(f"{nom}: replSetInitiate envoyé")
     except OperationFailure as erreur:
-        if erreur.code != 23:  # 23 = déjà initialisé (relance du projet)
+        if erreur.code != 23:
             raise
-        print(f"{nom} : déjà initialisé")
+        print(f"{nom}: déjà initialisé")
 
     def est_primaire():
-        if not client.admin.command("hello").get("isWritablePrimary"):
+        hello = client.admin.command("hello")
+        if not hello.get("isWritablePrimary"):
             raise PyMongoError(f"{membres[0]} pas encore PRIMARY")
+        return hello
 
-    reessayer(est_primaire)
-    print(f"{nom} : {membres[0]} est PRIMARY")
+    hello = reessayer(est_primaire, label=f"PRIMARY {nom}")
+    print(f"{nom}: PRIMARY = {hello.get('primary')}")
 
 
 def ajouter_groupes():
-    client = MongoClient(ROUTEURS)
+    client = MongoClient(ROUTEURS, serverSelectionTimeoutMS=5000)
     for nom in ("rs_a", "rs_b", "rs_c"):
-        hotes = ",".join(f"{hote}:{PORT}" for hote in REPLICA_SETS[nom])
-        reessayer(lambda: client.admin.command("addShard", f"{nom}/{hotes}", name=nom))
-        print(f"groupe {nom} ajouté au cluster")
+        port = REPLICA_SETS[nom]["port"]
+        hotes = ",".join(f"{h}:{port}" for h in REPLICA_SETS[nom]["members"])
+        shard = f"{nom}/{hotes}"
 
-    # Sans ça, toute la collection resterait sur un seul groupe.
-    # Clé "hashed" : les documents sont répartis tout de suite sur les 3 groupes.
-    client.admin.command("enableSharding", "books")
-    client.admin.command("shardCollection", "books.books", key={"_id": "hashed"})
-    print("books.books découpée sur les 3 groupes")
+        def add():
+            try:
+                return client.admin.command("addShard", shard)
+            except OperationFailure as e:
+                if getattr(e, "code", None) == 23 or "already" in str(e).lower():
+                    return {"ok": 1, "msg": "already"}
+                raise
+
+        res = reessayer(add, label=f"addShard {nom}")
+        print(f"groupe {nom}: {res}")
+
+    try:
+        client.admin.command("enableSharding", "books")
+        print("books: sharding activé")
+    except OperationFailure as e:
+        if getattr(e, "code", None) not in (23,) and "already" not in str(e).lower():
+            raise
+        print("books: sharding déjà activé")
+
+    try:
+        client.admin.command("shardCollection", "books.books", key={"_id": "hashed"})
+        print("books.books: shardCollection OK")
+    except OperationFailure as e:
+        if "already" not in str(e).lower():
+            raise
+        print("books.books: déjà shardée")
+
+
+def importer_books():
+    client = MongoClient(ROUTEURS, serverSelectionTimeoutMS=5000)
+    col = client["books"]["books"]
+    if col.estimated_document_count() > 0:
+        print(f"books.books: déjà importée ({col.count_documents({})} docs)")
+        return
+    if not os.path.exists(BOOKS_PATH):
+        print(f"books.books: fichier introuvable ({BOOKS_PATH}), import ignoré")
+        return
+    with open(BOOKS_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f, object_hook=json_util.object_hook)
+    if isinstance(data, list) and data:
+        col.insert_many(data, ordered=False)
+        print(f"books.books: {col.count_documents({})} documents importés")
+    else:
+        print("books.books: fichier vide ou format inattendu")
 
 
 if __name__ == "__main__":
-    for nom, membres in REPLICA_SETS.items():
-        initier_replica_set(nom, membres)
+    for nom, spec in REPLICA_SETS.items():
+        initier_replica_set(nom, spec)
     ajouter_groupes()
+    importer_books()
     print("Cluster prêt.")
