@@ -1,3 +1,5 @@
+name: cluster
+
 services:
   # ============ SERVEURS DE CONFIGURATION (replica set configRs) ============
   config_1:
@@ -5,6 +7,7 @@ services:
     container_name: config_1
     command: mongod --configsvr --replSet configRs --bind_ip_all --port 27019
     volumes:
+      - config_1-data:/data/configdb
       - config_1-data:/data/configdb
     networks: [mongo-net]
     restart: unless-stopped
@@ -15,6 +18,7 @@ services:
     command: mongod --configsvr --replSet configRs --bind_ip_all --port 27019
     volumes:
       - config_2-data:/data/configdb
+      - config_2-data:/data/configdb
     networks: [mongo-net]
     restart: unless-stopped
 
@@ -23,6 +27,7 @@ services:
     container_name: config_3
     command: mongod --configsvr --replSet configRs --bind_ip_all --port 27019
     volumes:
+      - config_3-data:/data/configdb
       - config_3-data:/data/configdb
     networks: [mongo-net]
     restart: unless-stopped
