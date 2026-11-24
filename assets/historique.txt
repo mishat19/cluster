@@ -1,61 +1,66 @@
-# Historique du projet - Mise à l'échelle (MongoDB sharded)
+Historique du projet - Mise à l'échelle (MongoDB sharded)
 
-## Approche initiale
-- Étudier l'architecture d'un cluster MongoDB sharded : routeurs (mongos), serveurs de configuration (config servers, replica set), shards (chaque shard est un replica set).
-- Définir l'ordre de démarrage logique : config servers -> shards -> routeurs -> initialisation (rs.initiate, addShard, enableSharding/shardCollection) -> import de données.
-- Mettre en place un `docker-compose.yml` avec noms imposés, réseau commun, volumes persistants et ports exposés pour les routeurs.
+Approche initiale
 
-## Difficultés rencontrées et solutions
-1. **Méconnaissance partielle de Docker/Compose**
-   - Difficulté : projection difficile sur la création de nombreux conteneurs interdépendants et sur la persistance.
-   - Solution : étude de la documentation Docker/Compose et des exemples MongoDB sharded; utilisation de volumes nommés, réseau dédié, `depends_on`, et d'un conteneur d'initialisation.
+Étudier l'architecture d'un cluster MongoDB sharded : routeurs (mongos), serveurs de configuration (config servers, replica set), shards (chaque shard est un replica set).
 
-2. **Peu d'expérience NoSQL/MongoDB en projet réel**
-   - Difficulté : comprendre les rôles (configsvr, shardsvr, mongos), la réplication et le sharding.
-   - Solution : schéma d'architecture (assets/schema_cluster.png) et tests progressifs (ping, rs.status, sh.status, distribution des chunks).
+Définir l'ordre de démarrage logique : config servers -> shards -> routeurs -> initialisation (rs.initiate, addShard, enableSharding/shardCollection) -> import de données.
 
-3. **Ordre d'initialisation et disponibilité des services**
-   - Difficulté : `rs.initiate`, `addShard` et `shardCollection` échouent si les membres ne sont pas prêts.
-   - Solution : script Python d'init avec réessais/attente (`init_cluster.py`) et exécution dans un conteneur `init_cluster` après démarrage des dépendances.
+Mettre en place un docker-compose.yml avec noms imposés, réseau commun, volumes persistants et ports exposés pour les routeurs.
 
-4. **Cohérence ports/rôles MongoDB**
-   - Difficulté : config servers en 27019, shards en 27018 (shardsvr), mongos en 27017; erreurs de connexion si ports mélangés dans les URI de replica set.
-   - Solution : ports explicites par rôle et configuration des membres de replica set avec le bon port (`host:27018` pour shards, `host:27019` pour config).
+Difficultés rencontrées et solutions
 
-5. **Import et format des données "books"**
-   - Difficulté : s'assurer que la collection est shardée et alimentée pour les tests d'éclatement.
-   - Solution : activation du sharding sur la base `books`, `shardCollection` sur `_id` hashed, import automatique depuis `scripts/books.txt` (JSON étendu) au démarrage.
+1 : Méconnaissance partielle de Docker/Compose
+Difficulté : projection difficile sur la création de nombreux conteneurs interdépendants et sur la persistance.
+Solution : étude de la documentation Docker/Compose et des exemples MongoDB sharded ; utilisation de volumes nommés, réseau dédié, depends_on et d'un conteneur d'initialisation.
 
-6. **Historique des modifications**
-   - Difficulté : conserver une trace des changements sans interface shell complexe.
-   - Solution : service `historique` qui s'abonne aux change streams du cluster via pymongo et journalise les opérations dans un volume persistant.
+2 : Peu d'expérience NoSQL/MongoDB en projet réel
+Difficulté : comprendre les rôles (configsvr, shardsvr, mongos), la réplication et le sharding.
+Solution : schéma d'architecture (assets/schema_cluster.png) et tests progressifs (ping, rs.status, sh.status, distribution des chunks).
 
-7. **Tests [OK] malgré un conteneur arrêté**
-   - Difficulté : certains tests restaient au vert lorsqu'un conteneur était éteint. La lecture des métadonnées (`config.shards`) ne reflétait pas l'état réel des membres et le client pouvait basculer sur l'autre routeur.
-   - Solution : interroger directement chaque `mongod` avec `hello`, tester les routeurs séparément et rejouer les scénarios d'arrêt avec `docker stop`.
+3 : Ordre d'initialisation et disponibilité des services
+Difficulté : rs.initiate, addShard et shardCollection échouent si les membres ne sont pas prêts.
+Solution : script Python d'initialisation avec réessais et attente (init_cluster.py), exécuté dans un conteneur init_cluster après le démarrage des dépendances.
 
-8. **Tests impossibles depuis l'hôte**
-   - Difficulté : lancés depuis l'hôte, les tests échouaient avec `Temporary failure in name resolution`, car les noms des conteneurs ne sont résolus que sur le réseau `mongo-net`.
-   - Solution : ajouter un service `tests` au réseau Compose et le lancer à la demande avec le profil `test`.
+4 : Cohérence ports/rôles MongoDB
+Difficulté : config servers en 27019, shards en 27018 (shardsvr), mongos en 27017 ; erreurs de connexion si les ports sont mélangés dans les URI de replica set.
+Solution : ports explicites par rôle et configuration des membres du replica set avec le bon port (host:27018 pour les shards, host:27019 pour les serveurs de configuration).
 
-9. **Vérification de la répartition des chunks**
-   - Difficulté : le test des chunks échouait, car depuis MongoDB 5.0, `config.chunks` référence la collection par `uuid` et non par `ns`. Le nombre de chunks par shard peut aussi diminuer automatiquement (fusion automatique probable, à confirmer avec `db.version()`).
-   - Solution : filtrer les chunks par `uuid` et vérifier leur répartition sur les trois shards, plutôt que d'imposer un nombre de chunks.
+5 : Import et format des données "books"
+Difficulté : s'assurer que la collection est shardée et alimentée pour les tests d'éclatement.
+Solution : activation du sharding sur la base books, shardCollection sur _id hashed et import automatique depuis scripts/books.txt (JSON étendu) au démarrage.
 
-10. **Initialisation fragile des replica sets**
-    - Difficulté : `replSetInitiate` n'était pas réessayé lorsque le membre n'était pas encore prêt.
-    - Solution : intégrer son appel à la fonction `reessayer`.
+6 : Historique des modifications
+Difficulté : conserver une trace des changements sans interface shell complexe.
+Solution : service historique qui s'abonne aux change streams du cluster via pymongo et journalise les opérations dans un volume persistant.
 
-12. **Test de l'historique en échec au premier lancement**
-    - Difficulté : `test_historique` échouait au premier lancement puis passait au second, car mongos attend la confirmation des 3 shards avant de transmettre un change stream (un shard inactif ne confirme qu'environ toutes les 10 s). Au premier lancement, la création de la base `test_cluster` dépasse les 10 s d'attente du test.
-    - Solution : retard mesuré en chronométrant des insertions, puis attente du test portée à 30 s.
+7 : Tests [OK] malgré un conteneur arrêté
+Difficulté : certains tests restaient au vert lorsqu'un conteneur était éteint. La lecture des métadonnées (config.shards) ne reflétait pas l'état réel des membres et le client pouvait basculer sur l'autre routeur.
+Solution : interroger directement chaque mongod avec hello, tester les routeurs séparément et rejouer les scénarios d'arrêt avec docker stop.
 
-## Sitographie
-- Documentation Docker : https://docs.docker.com/
-- Référence Docker Compose : https://docs.docker.com/compose/compose-file/
-- Documentation MongoDB - Sharding : https://www.mongodb.com/docs/manual/sharding/
-- Documentation MongoDB - Deploy a sharded cluster : https://www.mongodb.com/docs/manual/tutorial/deploy-shard-cluster/
-- Documentation MongoDB - Replica sets : https://www.mongodb.com/docs/manual/replication/
-- Documentation MongoDB - Change streams : https://www.mongodb.com/docs/manual/changeStreams/
-- Image officielle MongoDB (Docker Hub) : https://hub.docker.com/_/mongo
-- PyMongo documentation : https://pymongo.readthedocs.io/
+8 : Tests impossibles depuis l'hôte
+Difficulté : lancés depuis l'hôte, les tests échouaient avec "Temporary failure in name resolution", car les noms des conteneurs ne sont résolus que sur le réseau mongo-net.
+Solution : ajouter un service tests au réseau Compose et le lancer à la demande avec le profil test.
+
+9 : Vérification de la répartition des chunks
+Difficulté : le test des chunks échouait, car depuis MongoDB 5.0, config.chunks référence la collection par uuid et non par ns. Le nombre de chunks par shard peut aussi diminuer automatiquement (fusion automatique probable, à confirmer avec db.version()).
+Solution : filtrer les chunks par uuid et vérifier leur répartition sur les trois shards, plutôt que d'imposer un nombre de chunks.
+
+10 : Initialisation fragile des replica sets
+Difficulté : replSetInitiate n'était pas réessayé lorsque le membre n'était pas encore prêt.
+Solution : intégrer son appel à la fonction reessayer.
+
+11 : Test de l'historique en échec au premier lancement
+Difficulté : test_historique échouait au premier lancement puis passait au second, car mongos attend la confirmation des trois shards avant de transmettre un change stream (un shard inactif ne confirme qu'environ toutes les 10 s). Au premier lancement, la création de la base test_cluster dépasse les 10 s d'attente du test.
+Solution : retard mesuré en chronométrant des insertions, puis attente du test portée à 30 s.
+
+Sitographie
+
+Documentation Docker : https://docs.docker.com/
+Référence Docker Compose : https://docs.docker.com/compose/compose-file/
+Documentation MongoDB - Sharding : https://www.mongodb.com/docs/manual/sharding/
+Documentation MongoDB - Deploy a sharded cluster : https://www.mongodb.com/docs/manual/tutorial/deploy-shard-cluster/
+Documentation MongoDB - Replica sets : https://www.mongodb.com/docs/manual/replication/
+Documentation MongoDB - Change streams : https://www.mongodb.com/docs/manual/changeStreams/
+Image officielle MongoDB (Docker Hub) : https://hub.docker.com/_/mongo
+Documentation PyMongo : https://pymongo.readthedocs.io/
