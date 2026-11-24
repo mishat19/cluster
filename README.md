@@ -13,14 +13,21 @@ Cluster MongoDB simulé avec Docker Compose :
 
 ## Prérequis
 - Docker Desktop / Docker Engine avec le plugin Compose (`docker compose`)
-- Python 3.10+ (commande `python3`, pour `lancer.py`)
+- Python 3 (commande `python3`, uniquement pour exécuter `lancer.py`)
+- PyMongo n'a pas besoin d'être installé sur l'hôte ; il est installé dans l'image Python des conteneurs.
 
 ## Lancement (commande unique)
 Depuis la racine du projet :
 ```bash
 python3 lancer.py
 ```
-Cela construit/démarre les conteneurs, initialise le cluster, importe `scripts/books.txt` dans `books.books` et démarre le service `historique`. Le script attend 30 secondes avant d'afficher `Cluster prêt.` ; sur une machine lente, vérifier avec `docker logs init_cluster` que l'initialisation est bien terminée.
+Cela construit et démarre les conteneurs en arrière-plan. `init_cluster` initialise les replica sets, configure le sharding et importe `scripts/books.txt` dans `books.books` ; `historique` démarre après la réussite de cette initialisation.
+
+`lancer.py` affiche `Cluster prêt.` lorsque la commande Compose de démarrage se termine, mais n'attend pas la fin de l'initialisation. Avant d'utiliser le cluster ou de lancer les tests, vérifier que `init_cluster` a terminé :
+```bash
+docker logs init_cluster
+```
+Le journal doit contenir `Cluster prêt.`. Vérifier également que le service `historique` est démarré avec `docker compose ps` ou consulter ses logs avec `docker logs historique`.
 
 Arrêt :
 ```bash
