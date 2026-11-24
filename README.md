@@ -21,13 +21,7 @@ Depuis la racine du projet :
 ```bash
 python3 lancer.py
 ```
-Cela construit et démarre les conteneurs en arrière-plan. `init_cluster` initialise les replica sets, configure le sharding et importe `scripts/books.txt` dans `books.books` ; `historique` démarre après la réussite de cette initialisation.
-
-`lancer.py` affiche `Cluster prêt.` lorsque la commande Compose de démarrage se termine, mais n'attend pas la fin de l'initialisation. Avant d'utiliser le cluster ou de lancer les tests, vérifier que `init_cluster` a terminé :
-```bash
-docker logs init_cluster
-```
-Le journal doit contenir `Cluster prêt.`. Vérifier également que le service `historique` est démarré avec `docker compose ps` ou consulter ses logs avec `docker logs historique`.
+Cela construit/démarre les conteneurs, initialise le cluster, importe `scripts/books.txt` dans `books.books` et démarre le service `historique`. Le script rend la main dès que les conteneurs sont démarrés ; l'initialisation continue en arrière-plan (environ 30 s). Elle est terminée quand `docker logs init_cluster` affiche `Cluster prêt.`
 
 Arrêt :
 ```bash

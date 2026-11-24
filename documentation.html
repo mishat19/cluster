@@ -73,8 +73,7 @@ th { color: var(--muted); font-weight: 600; }
 <p>Il faut Docker (avec <code>docker compose</code>) et Python 3 pour exécuter <code>lancer.py</code>. PyMongo n'a pas besoin d'être installé sur l'hôte : il est installé dans l'image Python utilisée par les conteneurs. Depuis le dossier du projet :</p>
 <pre><code>python3 lancer.py          <span class="c"># démarre tout</span>
 python3 lancer.py stop     <span class="c"># arrête tout (les données sont gardées)</span></code></pre>
-<p><code>lancer.py</code> démarre les conteneurs puis attend que le service <code>historique</code> soit prêt à écouter les changements. Il affiche ensuite <code>Cluster prêt.</code> et l'adresse des routeurs.</p>
-<p>Sur une machine lente, la préparation peut durer plus longtemps. Pour vérifier qu'elle est bien terminée, cette commande doit finir par <code>Cluster prêt.</code> :</p>
+<p><code>lancer.py</code> démarre les conteneurs et rend la main tout de suite. La préparation du cluster continue en arrière-plan pendant environ 30 secondes. Elle est terminée quand cette commande finit par <code>Cluster prêt.</code> :</p>
 <pre><code>docker logs init_cluster</code></pre>
 
 <h2>Ce qui se passe au démarrage</h2>

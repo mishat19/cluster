@@ -46,6 +46,10 @@
     - Difficulté : `replSetInitiate` n'était pas réessayé lorsque le membre n'était pas encore prêt.
     - Solution : intégrer son appel à la fonction `reessayer`.
 
+12. **Test de l'historique en échec au premier lancement**
+    - Difficulté : `test_historique` échouait au premier lancement puis passait au second, car mongos attend la confirmation des 3 shards avant de transmettre un change stream (un shard inactif ne confirme qu'environ toutes les 10 s). Au premier lancement, la création de la base `test_cluster` dépasse les 10 s d'attente du test.
+    - Solution : retard mesuré en chronométrant des insertions, puis attente du test portée à 30 s.
+
 ## Sitographie
 - Documentation Docker : https://docs.docker.com/
 - Référence Docker Compose : https://docs.docker.com/compose/compose-file/
