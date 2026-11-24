@@ -12,8 +12,6 @@ if len(sys.argv) > 1 and sys.argv[1] == "stop":
 resultat = subprocess.run(["docker", "compose", "up", "-d", "--build"])
 
 if resultat.returncode == 0:
-    print("Conteneurs démarrés, attente de l'écoute de l'historique (30 s)...")
-    time.sleep(30)
     print("Cluster prêt.")
     print("Routeurs: routeur_1 -> localhost:27017, routeur_2 -> localhost:27018")
 else:

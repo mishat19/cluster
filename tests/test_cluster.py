@@ -79,7 +79,7 @@ def test_historique():
     res = col.insert_one({"_msg": "historique", "ts": time.time()})
     cle = str(res.inserted_id)
     try:
-        for _ in range(10):
+        for _ in range(30):
             time.sleep(1)
             if os.path.exists(LOG_HISTORIQUE):
                 with open(LOG_HISTORIQUE, encoding="utf-8") as f:
