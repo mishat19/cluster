@@ -71,9 +71,10 @@ th { color: var(--muted); font-weight: 600; }
 
 <h2>Lancer le projet</h2>
 <p>Il faut Docker (avec <code>docker compose</code>) et Python 3. Depuis le dossier du projet :</p>
-<pre><code>python lancer.py          <span class="c"># démarre tout</span>
-python lancer.py stop     <span class="c"># arrête tout (les données sont gardées)</span></code></pre>
-<p>Le démarrage continue en arrière-plan pendant environ 30 secondes. C'est prêt quand cette commande affiche <code>Cluster prêt.</code> :</p>
+<pre><code>python3 lancer.py          <span class="c"># démarre tout</span>
+python3 lancer.py stop     <span class="c"># arrête tout (les données sont gardées)</span></code></pre>
+<p><code>lancer.py</code> démarre les conteneurs puis attend 30 secondes, le temps que le cluster se prépare. Il affiche ensuite <code>Cluster prêt.</code> et l'adresse des routeurs.</p>
+<p>Sur une machine lente, la préparation peut durer plus longtemps. Pour vérifier qu'elle est bien terminée, cette commande doit finir par <code>Cluster prêt.</code> :</p>
 <pre><code>docker logs init_cluster</code></pre>
 
 <h2>Ce qui se passe au démarrage</h2>
@@ -87,9 +88,20 @@ python lancer.py stop     <span class="c"># arrête tout (les données sont gard
 <p>Ensuite <code>historique</code> démarre. On peut relancer le projet autant de fois qu'on veut : ce qui est déjà fait n'est pas refait.</p>
 
 <h2>Tester</h2>
-<pre><code>pip install pymongo
-python tests/test_cluster.py</code></pre>
-<p>Le script vérifie les deux routeurs, les trois groupes avec leurs réplicats, la répartition de <code>books.books</code>, la lecture des livres et une écriture. Si tout va bien, il affiche <code>Tous les tests sont passés (6/6)</code>.</p>
+<p>Les tests tournent dans un conteneur <code>tests</code>, branché sur le même réseau que le cluster. Rien à installer sur la machine. Le cluster doit être démarré :</p>
+<pre><code>docker compose --profile test run --rm tests</code></pre>
+<p>Le script fait 8 vérifications :</p>
+<ul>
+  <li><code>routeur_1</code> et <code>routeur_2</code> répondent, chacun testé séparément ;</li>
+  <li>chaque groupe (<code>rs_a</code>, <code>rs_b</code>, <code>rs_c</code>) a bien 1 PRIMARY et 2 SECONDARY en ce moment ;</li>
+  <li><code>configRs</code> a bien 1 PRIMARY et 2 SECONDARY ;</li>
+  <li>une insertion apparaît dans le journal de <code>historique</code> ;</li>
+  <li>une écriture confirmée par la majorité des serveurs, puis sa lecture et sa suppression ;</li>
+  <li>les trois groupes sont déclarés dans le cluster avec 3 membres chacun ;</li>
+  <li><code>books.books</code> est shardée sur <code>_id</code> hashé et ses morceaux sont répartis sur les trois groupes ;</li>
+  <li>les livres sont lisibles via les routeurs.</li>
+</ul>
+<p>Si tout va bien, il affiche <code>Tous les tests sont passés (8/8)</code>. Si un conteneur est éteint, le test concerné échoue et donne son nom, par exemple <code>rs_a dégradé : {'principal_a': 'INJOIGNABLE', ...}</code>.</p>
 
 <h2>Fichiers</h2>
 <ul>
@@ -97,7 +109,7 @@ python tests/test_cluster.py</code></pre>
   <li><code>docker-compose.yml</code> : tous les serveurs, leurs volumes et le réseau</li>
   <li><code>python/init_cluster.py</code> : prépare le cluster et importe les livres</li>
   <li><code>python/historique.py</code> : enregistre les modifications</li>
-  <li><code>python/Dockerfile</code> : image Python utilisée par les deux scripts</li>
+  <li><code>python/Dockerfile</code> : image Python utilisée par <code>init_cluster</code>, <code>historique</code> et <code>tests</code></li>
   <li><code>scripts/books.txt</code> : les données</li>
   <li><code>tests/test_cluster.py</code> : les tests</li>
   <li><code>assets/b.a.-ba.txt</code> : explication des mots-clés Docker</li>

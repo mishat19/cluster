@@ -8,22 +8,23 @@ Cluster MongoDB simulé avec Docker Compose :
   - `principal_b`, `secondaire_b_1`, `secondaire_b_2` (`rs_b`)
   - `principal_c`, `secondaire_c_1`, `secondaire_c_2` (`rs_c`)
 - 1 serveur `historique` journalisant les modifications (change streams)
+- 1 conteneur `tests` (profil `test`, lancé à la demande) qui exécute `tests/test_cluster.py`
 - Initialisation automatique (`init_cluster`) : replica sets, ajout des shards, sharding de `books.books` et import des données
 
 ## Prérequis
 - Docker Desktop / Docker Engine avec le plugin Compose (`docker compose`)
-- Python 3.10+ (pour `lancer.py` et les tests locaux)
+- Python 3.10+ (commande `python3`, pour `lancer.py`)
 
 ## Lancement (commande unique)
 Depuis la racine du projet :
 ```bash
-python lancer.py
+python3 lancer.py
 ```
-Cela construit/démarre les conteneurs, initialise le cluster, importe `scripts/books.txt` dans `books.books` et démarre le service `historique`.
+Cela construit/démarre les conteneurs, initialise le cluster, importe `scripts/books.txt` dans `books.books` et démarre le service `historique`. Le script attend 30 secondes avant d'afficher `Cluster prêt.` ; sur une machine lente, vérifier avec `docker logs init_cluster` que l'initialisation est bien terminée.
 
 Arrêt :
 ```bash
-python lancer.py stop
+python3 lancer.py stop
 ```
 
 ## Accès
@@ -38,18 +39,27 @@ docker logs -f historique
 ```
 
 ## Tests (éclat et réplicats)
-Le cluster doit être démarré et initialisé :
+Les tests tournent dans le conteneur `tests` (profil `test`), sur le réseau `mongo-net`, car les noms `routeur_1`, `principal_a`… n'existent pas sur la machine hôte. Rien à installer localement. Le cluster doit être démarré et initialisé :
 ```bash
-python -m pip install pymongo
-python tests/test_cluster.py
+docker compose --profile test run --rm tests
 ```
-Le script vérifie : accessibilité des 2 routeurs, présence des 3 shards (3 membres chacun), sharding de `books.books`, accès aux données importées, présence des réplicats et opérations d'écriture/lecture via mongos.
+Le script fait 8 vérifications :
+- `routeur_1` et `routeur_2` joignables, chacun séparément ;
+- état réel des 3 shards : 1 PRIMARY + 2 SECONDARY chacun ;
+- état réel de `configRs` : 1 PRIMARY + 2 SECONDARY ;
+- une insertion apparaît dans le journal de `historique` ;
+- écriture/lecture/suppression via routeur avec `w=majority` ;
+- 3 shards déclarés dans la configuration, 3 membres chacun ;
+- `books.books` shardée sur `_id` hashé, chunks présents sur les 3 shards ;
+- données `books` lisibles via routeur.
+
+Résultat attendu : `Tous les tests sont passés (8/8)`. Si un conteneur est éteint, le test concerné échoue en le nommant.
 
 ## Structure du projet
 - `docker-compose.yml` : définition de l'infrastructure
 - `python/init_cluster.py` : initialisation du cluster et import des données
 - `python/historique.py` : journalisation des changements
-- `python/Dockerfile` : image Python utilisée par `init_cluster` et `historique`
+- `python/Dockerfile` : image Python utilisée par `init_cluster`, `historique` et `tests`
 - `scripts/books.txt` : jeu de données à importer
 - `tests/test_cluster.py` : tests Python du cluster
 - `lancer.py` : lancement/arrêt du projet
@@ -60,9 +70,9 @@ Le script vérifie : accessibilité des 2 routeurs, présence des 3 shards (3 me
 ## Persistance et réinitialisation
 Les données MongoDB et l'historique sont stockés dans des volumes Docker nommés. Pour repartir de zéro :
 ```bash
-python lancer.py stop
+python3 lancer.py stop
 docker compose down -v
-python lancer.py
+python3 lancer.py
 ```
 
 ## Maintenance (pour débutant)
