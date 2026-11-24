@@ -187,6 +187,16 @@ services:
     command: ["python", "/app/historique.py"]
     restart: unless-stopped
 
+  tests:
+    build:
+      context: ./python
+    profiles: [test]
+    volumes:
+      - ./tests:/tests:ro
+      - historique-data:/data/historique:ro
+    networks: [mongo-net]
+    command: ["python", "/tests/test_cluster.py"]
+
 volumes:
   config_1-data:
   config_2-data:

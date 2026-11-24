@@ -45,13 +45,17 @@ def initier_replica_set(nom, spec):
         config["configsvr"] = True
 
     client = MongoClient(membres[0], port, directConnection=True, serverSelectionTimeoutMS=5000)
-    try:
-        client.admin.command("replSetInitiate", config)
-        print(f"{nom}: replSetInitiate envoyé")
-    except OperationFailure as erreur:
-        if erreur.code != 23:
-            raise
-        print(f"{nom}: déjà initialisé")
+
+    def initier():
+        try:
+            client.admin.command("replSetInitiate", config)
+            print(f"{nom}: replSetInitiate envoyé")
+        except OperationFailure as erreur:
+            if erreur.code != 23:
+                raise
+            print(f"{nom}: déjà initialisé")
+
+    reessayer(initier, label=f"replSetInitiate {nom}")
 
     def est_primaire():
         hello = client.admin.command("hello")
