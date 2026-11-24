@@ -1,114 +1,108 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Documentation - Cluster MongoDB sharded</title>
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.5; margin: 24px; max-width: 980px; }
-    h1, h2, h3 { color: #1f2937; }
-    code, pre { background: #f3f4f6; border-radius: 4px; }
-    code { padding: 2px 4px; }
-    pre { padding: 12px; overflow: auto; }
-    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-    th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #f9fafb; }
-    .note { background: #fff7ed; border-left: 4px solid #f59e0b; padding: 10px 12px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cluster MongoDB shardé</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1d2420; --muted: #5f6b65; --line: #dde3e0;
+  --code-bg: #f1f4f2; --accent: #0b7a55; --accent-soft: #e3f2ec;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141917; --fg: #e4ebe7; --muted: #98a59f; --line: #2c3632;
+    --code-bg: #1d2522; --accent: #4cc38a; --accent-soft: #17302a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141917; --fg: #e4ebe7; --muted: #98a59f; --line: #2c3632;
+  --code-bg: #1d2522; --accent: #4cc38a; --accent-soft: #17302a; color-scheme: dark;
+}
+body {
+  margin: 0 auto; max-width: 860px;
+  padding: 32px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
+  background: var(--bg); color: var(--fg);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 30px; margin: 0 0 8px; }
+h2 { font-size: 21px; margin: 40px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+p, li { max-width: 70ch; }
+a { color: var(--accent); }
+code { font-family: ui-monospace, Consolas, monospace; font-size: .9em; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font-size: 14px; }
+pre code { background: none; padding: 0; }
+.c { color: var(--muted); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.table-wrap { overflow-x: auto; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+
+.schema-box { margin-top: 16px; }
+.schema-box img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.caption { font-size: 14px; color: var(--muted); }
+</style>
 </head>
 <body>
-  <h1>Projet 1 - Mise à l'échelle : documentation</h1>
-  <p>Cette documentation explique l'architecture, la mise en œuvre et la maintenance d'un cluster MongoDB sharded simulé avec Docker Compose.</p>
 
-  <h2>1. Architecture</h2>
-  <ul>
-    <li><strong>2 routeurs (mongos)</strong> : <code>routeur_1</code> (hôte 27017), <code>routeur_2</code> (hôte 27018). Ils reçoivent les requêtes clientes et les routent vers les shards via les config servers.</li>
-    <li><strong>3 serveurs de configuration</strong> : <code>config_1</code>, <code>config_2</code>, <code>config_3</code> (replica set <code>configRs</code>, port 27019). Ils stockent les métadonnées du cluster (chunks, shards).</li>
-    <li><strong>3 shards (données)</strong>, chaque shard étant un replica set (1 principal + 2 secondaires) :
-      <ul>
-        <li><code>rs_a</code> : <code>principal_a</code>, <code>secondaire_a_1</code>, <code>secondaire_a_2</code></li>
-        <li><code>rs_b</code> : <code>principal_b</code>, <code>secondaire_b_1</code>, <code>secondaire_b_2</code></li>
-        <li><code>rs_c</code> : <code>principal_c</code>, <code>secondaire_c_1</code>, <code>secondaire_c_2</code></li>
-      </ul>
-    </li>
-    <li><strong>Serveur historique</strong> : <code>historique</code>, écoute les change streams du cluster et journalise les modifications dans un volume persistant.</li>
-    <li><strong>Initialisation</strong> : <code>init_cluster</code> (contenu Python) initialise les replica sets, ajoute les shards, active le sharding de <code>books.books</code> et importe <code>scripts/books.txt</code>.</li>
-  </ul>
+<h1>Cluster MongoDB</h1>
 
-  <h2>2. Prérequis</h2>
-  <ul>
-    <li>Docker Engine/Desktop avec Docker Compose v2 (<code>docker compose</code>).</li>
-    <li>Python 3.10+ sur la machine hôte pour exécuter <code>lancer.py</code> et les tests.</li>
-    <li>Ports hôte libres : <code>27017</code> et <code>27018</code>.</li>
-  </ul>
+<h2>Schéma</h2>
+<div class="schema-box">
+<img src="assets/schema_cluster.png" alt="Schéma du cluster : Python se connecte à routeur_1 et routeur_2, qui lisent configRs et envoient les requêtes aux groupes rs_a, rs_b et rs_c. Dans chaque groupe, le principal réplique vers deux secondaires. historique écoute les modifications via routeur_1.">
+</div>
+<p class="caption">Le client passe par un des deux routeurs. Le routeur regarde dans les serveurs de configuration quel groupe contient la donnée, puis envoie la requête au serveur principal de ce groupe. Le principal copie chaque modification sur ses deux secondaires.</p>
 
-  <h2>3. Mise en œuvre (démarrage)</h2>
-  <h3>3.1 Lancement automatique</h3>
-  <pre><code>python lancer.py</code></pre>
-  <p>Le script exécute <code>docker compose up -d --build</code>. L'ordre fonctionnel est assuré par les dépendances et par l'initialisation :</p>
-  <ol>
-    <li>Démarrage des config servers, shards et routeurs.</li>
-    <li><code>init_cluster</code> : <code>replSetInitiate</code> pour <code>configRs</code>, <code>rs_a</code>, <code>rs_b</code>, <code>rs_c</code>, attente des PRIMARY, <code>addShard</code>, <code>enableSharding</code>/<code>shardCollection</code> (<code>_id: hashed</code>) puis import de <code>books.books</code>.</li>
-    <li><code>historique</code> démarre après succès de l'initialisation et commence à journaliser les changements.</li>
-  </ol>
+<h2>Les serveurs</h2>
+<ul>
+  <li><b>2 routeurs</b> (<code>mongos</code>) : <code>routeur_1</code> sur <code>localhost:27017</code>, <code>routeur_2</code> sur <code>localhost:27018</code>.</li>
+  <li><b>3 serveurs de configuration</b> : <code>config_1</code>, <code>config_2</code>, <code>config_3</code> (groupe <code>configRs</code>). Ils savent où se trouve chaque donnée.</li>
+  <li><b>3 groupes de données</b>, chacun avec un principal et deux secondaires :
+    <ul>
+      <li><code>rs_a</code> : <code>principal_a</code>, <code>secondaire_a_1</code>, <code>secondaire_a_2</code></li>
+      <li><code>rs_b</code> : <code>principal_b</code>, <code>secondaire_b_1</code>, <code>secondaire_b_2</code></li>
+      <li><code>rs_c</code> : <code>principal_c</code>, <code>secondaire_c_1</code>, <code>secondaire_c_2</code></li>
+    </ul>
+  </li>
+  <li><b><code>historique</code></b> : note toutes les modifications des données dans un fichier.</li>
+  <li><b><code>init_cluster</code></b> : prépare le cluster au démarrage puis s'arrête.</li>
+</ul>
 
-  <h3>3.2 Arrêt</h3>
-  <pre><code>python lancer.py stop</code></pre>
+<h2>Lancer le projet</h2>
+<p>Il faut Docker (avec <code>docker compose</code>) et Python 3. Depuis le dossier du projet :</p>
+<pre><code>python lancer.py          <span class="c"># démarre tout</span>
+python lancer.py stop     <span class="c"># arrête tout (les données sont gardées)</span></code></pre>
+<p>Le démarrage continue en arrière-plan pendant environ 30 secondes. C'est prêt quand cette commande affiche <code>Cluster prêt.</code> :</p>
+<pre><code>docker logs init_cluster</code></pre>
 
-  <h3>3.3 Vérifications manuelles</h3>
-  <pre><code>docker compose ps
-docker logs init_cluster
-docker logs historique
-docker exec -it routeur_1 mongosh --port 27017 --eval "sh.status()"
-docker exec -it routeur_1 mongosh --port 27017 --eval "db.getSiblingDB('books').books.countDocuments()"</code></pre>
+<h2>Ce qui se passe au démarrage</h2>
+<p><code>init_cluster</code> fait les étapes dans cet ordre, car chacune a besoin de la précédente :</p>
+<ol>
+  <li>il crée les groupes (<code>configRs</code>, <code>rs_a</code>, <code>rs_b</code>, <code>rs_c</code>) et attend que chaque principal soit élu ;</li>
+  <li>il ajoute les trois groupes de données au cluster via les routeurs ;</li>
+  <li>il active le sharding sur <code>books.books</code>, avec la clé <code>_id</code> hashée pour répartir les livres ;</li>
+  <li>il importe <code>scripts/books.txt</code> si la collection est vide.</li>
+</ol>
+<p>Ensuite <code>historique</code> démarre. On peut relancer le projet autant de fois qu'on veut : ce qui est déjà fait n'est pas refait.</p>
 
-  <h2>4. Tests (Python)</h2>
-  <p>Avec le cluster démarré et prêt :</p>
-  <pre><code>python -m pip install pymongo
+<h2>Tester</h2>
+<pre><code>pip install pymongo
 python tests/test_cluster.py</code></pre>
-  <p>Le fichier <code>tests/test_cluster.py</code> valide : routeurs <code>mongos</code>, 3 shards et 3 membres par replica set, sharding de <code>books.books</code>, présence des données importées, réplicats (PRIMARY/SECONDARY) et opérations CRUD via les routeurs.</p>
+<p>Le script vérifie les deux routeurs, les trois groupes avec leurs réplicats, la répartition de <code>books.books</code>, la lecture des livres et une écriture. Si tout va bien, il affiche <code>Tous les tests sont passés (6/6)</code>.</p>
 
-  <h2>5. Réseau, ports et persistance</h2>
-  <table>
-    <tr><th>Composant</th><th>Port interne</th><th>Exposition hôte</th><th>Données</th></tr>
-    <tr><td>Config servers</td><td>27019</td><td>non</td><td>Volumes <code>config_* -data</code></td></tr>
-    <tr><td>Shards (mongod --shardsvr)</td><td>27018</td><td>non</td><td>Volumes <code>principal_*</code>, <code>secondaire_*</code></td></tr>
-    <tr><td>Routeurs (mongos)</td><td>27017</td><td>27017, 27018</td><td>sans état</td></tr>
-    <tr><td>Historique</td><td>-</td><td>non</td><td>Volume <code>historique-data</code> (/data/historique)</td></tr>
-  </table>
-  <div class="note"><strong>Important :</strong> les shards et config servers ne sont pas exposés sur l'hôte ; les clients doivent passer par les routeurs. Tous les services communiquent via le réseau Docker <code>mongo-net</code>.</div>
+<h2>Fichiers</h2>
+<ul>
+  <li><code>lancer.py</code> : lance ou arrête le projet</li>
+  <li><code>docker-compose.yml</code> : tous les serveurs, leurs volumes et le réseau</li>
+  <li><code>python/init_cluster.py</code> : prépare le cluster et importe les livres</li>
+  <li><code>python/historique.py</code> : enregistre les modifications</li>
+  <li><code>python/Dockerfile</code> : image Python utilisée par les deux scripts</li>
+  <li><code>scripts/books.txt</code> : les données</li>
+  <li><code>tests/test_cluster.py</code> : les tests</li>
+  <li><code>assets/b.a.-ba.txt</code> : explication des mots-clés Docker</li>
+  <li><code>assets/historique.txt</code> : difficultés, solutions et sources</li>
+</ul>
 
-  <h2>6. Fichiers livrés</h2>
-  <ul>
-    <li><code>docker-compose.yml</code> : infrastructure et dépendances.</li>
-    <li><code>lancer.py</code> : lancement/arrêt du projet en une commande Python.</li>
-    <li><code>python/init_cluster.py</code>, <code>python/historique.py</code>, <code>python/Dockerfile</code>.</li>
-    <li><code>scripts/books.txt</code> : données importées.</li>
-    <li><code>tests/test_cluster.py</code> : tests automatisés.</li>
-    <li><code>assets/b.a.-ba.txt</code>, <code>assets/historique.txt</code>, <code>assets/cluster_mongo_schema.png</code>.</li>
-    <li><code>README.md</code>, <code>documentation.html</code>.</li>
-  </ul>
-
-  <h2>7. Maintenance et reprise du projet (débutant)</h2>
-  <h3>Diagnostic</h3>
-  <pre><code>docker compose ps
-docker compose logs -f --tail=100 init_cluster
-docker compose logs -f --tail=100 historique
-docker compose logs -f routeur_1</code></pre>
-  <h3>Problèmes fréquents</h3>
-  <ul>
-    <li><strong>Ports 27017/27018 déjà utilisés</strong> : arrêter le service en conflit ou modifier les mappings dans <code>docker-compose.yml</code> (et ajuster tests/URI).</li>
-    <li><strong>Initialisation incomplète</strong> : consulter <code>init_cluster</code> ; relancer après correction avec <code>docker compose up -d --build</code>.</li>
-    <li><strong>État incohérent après modification de topologie</strong> : réinitialiser les volumes.</li>
-  </ul>
-  <pre><code>python lancer.py stop
-docker compose down -v
-python lancer.py</code></pre>
-  <h3>Bonnes pratiques</h3>
-  <ul>
-    <li>Ne pas changer les noms de conteneurs/replica sets sans mettre à jour <code>init_cluster.py</code>, les tests et la documentation.</li>
-    <li>Conserver les volumes pour garder les données ; les supprimer uniquement pour une réinitialisation complète.</li>
-    <li>Vérifier le cluster avec <code>sh.status()</code> et le script de test après toute modification.</li>
-  </ul>
 </body>
 </html>

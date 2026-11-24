@@ -12,7 +12,7 @@
 
 2. **Peu d'expérience NoSQL/MongoDB en projet réel**
    - Difficulté : comprendre les rôles (configsvr, shardsvr, mongos), la réplication et le sharding.
-   - Solution : schéma d'architecture (assets/cluster_mongo_schema.png) et tests progressifs (ping, rs.status, sh.status, distribution des chunks).
+   - Solution : schéma d'architecture (assets/schema_cluster.png) et tests progressifs (ping, rs.status, sh.status, distribution des chunks).
 
 3. **Ordre d'initialisation et disponibilité des services**
    - Difficulté : `rs.initiate`, `addShard` et `shardCollection` échouent si les membres ne sont pas prêts.
